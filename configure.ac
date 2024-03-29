@@ -138,6 +138,17 @@ AS_IF([test "x$with_pgsql" != "xno"],
    [pgsql_support=no])
 AC_MSG_RESULT([$pgsql_support])
 
+# Check if we should compile with DM support
+AC_ARG_WITH([dm],
+            AS_HELP_STRING([--with-dm],
+                           [compile with DM support (default is disabled)]),
+            [], [with_dm=no])
+AC_MSG_CHECKING([whether to compile with DM support])
+AS_IF([test "x$with_dm" != "xno"],
+   [dm_support=yes],
+   [dm_support=no])
+AC_MSG_RESULT([$dm_support])
+
 # Set LuaJIT flags
 SB_LUAJIT
 
@@ -184,6 +195,8 @@ ACX_PTHREAD
 AC_CHECK_LIB(m, sqrt)
 
 SB_CHECK_MYSQL
+
+SB_CHECK_DM
 
 AS_IF([test x$with_pgsql != xno], [
     AC_CHECK_PGSQL([$with_pgsql])
@@ -398,6 +411,7 @@ src/Makefile
 src/drivers/Makefile
 src/drivers/mysql/Makefile
 src/drivers/pgsql/Makefile
+src/drivers/dm/Makefile
 src/tests/Makefile
 src/tests/cpu/Makefile
 src/tests/fileio/Makefile
@@ -428,6 +442,7 @@ AC_MSG_RESULT([datadir            : $(eval echo ${datadir})])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([MySQL support      : ${mysql_support}])
 AC_MSG_RESULT([PostgreSQL support : ${pgsql_support}])
+AC_MSG_RESULT([DM support         : ${dm_support}])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([LuaJIT             : ${sb_use_luajit}])
 AC_MSG_RESULT([LUAJIT_CFLAGS      : ${LUAJIT_CFLAGS}])
