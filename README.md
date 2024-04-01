@@ -196,7 +196,7 @@ To compile sysbench without MySQL support, use `--without-mysql`. If no
 database drivers are available database-related scripts will not work,
 but other benchmarks will be functional.
 
-## 达梦数据库安装示例 CentOS
+## Sysbench(达梦)安装示例 CentOS
 
 - 达梦客户端必要文件(如编译本机未安装达梦，可从已安装机器中拷入以下必要文件到相应目录)
 ```
