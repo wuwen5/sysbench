@@ -195,6 +195,38 @@ To compile sysbench without MySQL support, use `--without-mysql`. If no
 database drivers are available database-related scripts will not work,
 but other benchmarks will be functional.
 
+## 达梦数据库安装示例 CentOS
+
+- 达梦客户端必要文件(如编译本机未安装达梦，可从已安装机器中拷入以下必要文件到相应目录)
+```
+# /opt/dmdbms
+├── bin
+│   └── libcrypto.so
+└── include
+    ├── DCI.h
+    ├── DPIext.h
+    ├── DPI.h
+    ├── DPItypes.h
+    ├── libdmdci.a
+    └── libdmdpi.a
+```
+
+- 编译安装
+``` shell
+export LDFLAGS=-lrt
+export DM_HOME=/opt/dmdbms
+./autogen.sh
+#如未安装mysql-dev或不需要支持mysql,可增加 --without-mysql
+./configure --with-dm --with-dm-includes=/opt/dmdbms/include --without-mysql
+make -j
+make install
+```
+
+测试示例
+``` shell
+sysbench oltp_point_select --tables=1 --table-size=1 --db-driver=dm --dm-db=192.168.x.x:5237 --dm-user=SYSDBA --dm-password=SYSDBA --threads=16 --time=10 --report-interval=10 prepare
+```
+
 # Usage
 
 ## General Syntax
