@@ -22,6 +22,7 @@
         - [Fedora](#fedora)
         - [macOS](#macos)
     - [Build and Install](#build-and-install)
+    - [编译安装(达梦)](#%E8%BE%BE%E6%A2%A6%E6%95%B0%E6%8D%AE%E5%BA%93%E5%AE%89%E8%A3%85%E7%A4%BA%E4%BE%8B-centos)
 - [Usage](#usage)
     - [General Syntax](#general-syntax)
     - [General Command Line Options](#general-command-line-options)
