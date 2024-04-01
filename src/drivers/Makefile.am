@@ -27,4 +27,8 @@ if USE_DM
 DM_DIR = dm
 endif
 
-SUBDIRS = $(MYSQL_DIR) $(PGSQL_DIR) ${DM_DIR}
+if USE_ORACLE
+ORACLE_DIR = oracle
+endif
+
+SUBDIRS = $(MYSQL_DIR) $(PGSQL_DIR) ${DM_DIR} $(ORACLE_DIR)

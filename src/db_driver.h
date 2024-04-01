@@ -346,4 +346,8 @@ int register_driver_pgsql(sb_list_t *);
 int register_driver_dm(sb_list_t *);
 #endif
 
+#ifdef USE_ORACLE
+int register_driver_oracle(sb_list_t *);
+#endif
+
 #endif /* DB_DRIVER_H */
