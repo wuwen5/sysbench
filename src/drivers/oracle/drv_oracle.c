@@ -48,11 +48,10 @@
 
 static sb_arg_t ora_drv_args[] =
 {
-  {"oracle-user", "Oracle user", SB_ARG_TYPE_STRING, "sbtest"},
-  {"oracle-password", "Oracle password", SB_ARG_TYPE_STRING, ""},
-  {"oracle-db", "Oracle database name", SB_ARG_TYPE_STRING, "sbtest"},
-  
-  {NULL, NULL, SB_ARG_TYPE_NULL, NULL}
+  SB_OPT("oracle-user", "Oracle user", "SYSDBA", STRING),
+  SB_OPT("oracle-password", "Oracle password", "SYSDBA", STRING),
+  SB_OPT("oracle-db", "Oracle database name", "sbtest", STRING),
+  SB_OPT_END
 };
 
 typedef struct
@@ -156,7 +155,10 @@ static drv_caps_t ora_drv_caps =
 {
   .multi_rows_insert = 0,
   .prepared_statements = 1,
+  .auto_increment = 1,
   .needs_commit = 1,
+  .serial = 0,
+  .unsigned_int = 1
 };
 
 
@@ -205,9 +207,9 @@ static db_driver_t oracle_driver =
     .free_results = ora_drv_free_results,
     .close = ora_drv_close,
     .query = ora_drv_query,
-    .store_results = ora_drv_store_results,
     .done = ora_drv_done
-  }
+  },
+  .listitem = {NULL, NULL}
 };
 
 
@@ -241,8 +243,10 @@ int ora_drv_init(void)
   args.db = sb_get_value_string("oracle-db");
 
   /* Initialize the environment */
-  rc = OCIEnvCreate(&ora_env, OCI_THREADED | OCI_OBJECT, NULL, NULL, NULL, NULL,
-                    0, NULL);
+  rc = OCIEnvCreate(&ora_env, (ub4) OCI_DEFAULT,
+          (dvoid *) 0, (dvoid * (*)(dvoid *,size_t)) 0,
+          (dvoid * (*)(dvoid *, dvoid *, size_t)) 0,
+          (void (*)(dvoid *, dvoid *)) 0, (size_t) 0, (dvoid **) 0);
   if (rc != OCI_SUCCESS || ora_env == NULL)
   {
     log_text(LOG_FATAL, "OCIEnvCreate failed!");
@@ -278,7 +282,7 @@ int ora_drv_connect(db_conn_t *sb_conn)
   
   /* Allocate a service handle */
   rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_con->svchp), OCI_HTYPE_SVCCTX, 0,
-                      (dvoid **)NULL);
+                      (dvoid **)0);
   if (rc != OCI_SUCCESS)
   {
     log_text(LOG_FATAL, "OCIHandleAlloc (OCI_HTYPE_SVCCTX) failed");
@@ -287,7 +291,7 @@ int ora_drv_connect(db_conn_t *sb_conn)
 
   /* Allocate an error handle */
   rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_con->errhp), OCI_HTYPE_ERROR, 0,
-                      (dvoid **)NULL);
+                      (dvoid **)0);
   if (rc != OCI_SUCCESS)
   {
     log_text(LOG_FATAL, "OCIHandleAlloc (OCI_HTYPE_ERROR) failed");
@@ -296,12 +300,12 @@ int ora_drv_connect(db_conn_t *sb_conn)
 
   /* Allocate an server handle */
   rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_con->srvhp), OCI_HTYPE_SERVER, 0,
-                      (dvoid **)NULL);
+                      (dvoid **)0);
   CHECKERR("OCIHandleAlloc");
   
   /* Allocate a user session handle */
   rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_con->usrhp), OCI_HTYPE_SESSION, 0,
-                      (dvoid **)NULL);
+                      (dvoid **)0);
   CHECKERR("OCIHandleAlloc");
 
   /* Attach to the server */
@@ -326,7 +330,7 @@ int ora_drv_connect(db_conn_t *sb_conn)
 
   /* Allocate the transaction handle and set it to service context */
   rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_con->transhp), OCI_HTYPE_TRANS, 0,
-                      (dvoid **)NULL);
+                      (dvoid **)0);
   CHECKERR("OCIHandleAlloc");
   rc = OCIAttrSet(ora_con->svchp, OCI_HTYPE_SVCCTX, ora_con->transhp, 0,
                   OCI_ATTR_TRANS, ora_con->errhp);
@@ -423,7 +427,7 @@ int ora_drv_prepare(db_stmt_t *stmt, const char *query, size_t len)
       goto error;
     
     rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_stmt->ptr), OCI_HTYPE_STMT, 0,
-                        NULL);
+                        0);
     if (rc != OCI_SUCCESS)
       goto error;
 
@@ -462,6 +466,14 @@ int ora_drv_prepare(db_stmt_t *stmt, const char *query, size_t len)
     buf[j] = '\0';
     
     ora_stmt->type = get_stmt_type(buf);
+    
+    if(ora_stmt->type == STMT_TYPE_BEGIN || ora_stmt->type== STMT_TYPE_COMMIT){
+    		stmt->counter = SB_CNT_OTHER;
+    	}else if(ora_stmt->type == STMT_TYPE_SELECT){
+    		stmt->counter = SB_CNT_READ;
+    	}else if(ora_stmt->type == STMT_TYPE_UPDATE){
+    		stmt->counter = SB_CNT_WRITE;
+    	}
     
     if (ora_stmt->type != STMT_TYPE_BEGIN &&
         ora_stmt->type != STMT_TYPE_COMMIT)
@@ -589,8 +601,8 @@ int ora_drv_bind_result(db_stmt_t *stmt, db_bind_t *params, size_t len)
 
 db_error_t ora_drv_execute(db_stmt_t *stmt, db_result_t *rs)
 {
-  db_conn_t       *db_con = stmt->connection;
-  ora_stmt_t      *ora_stmt = stmt->ptr;
+  db_conn_t       *db_con = (ora_conn_t *)stmt->connection;
+  ora_stmt_t      *ora_stmt = (ora_stmt_t *)stmt->ptr;
   ora_conn_t      *ora_con;
   ub4             iters;
   char            *buf = NULL;
@@ -615,6 +627,7 @@ db_error_t ora_drv_execute(db_stmt_t *stmt, db_result_t *rs)
 
     if (ora_stmt->type == STMT_TYPE_BEGIN)
     {
+      rs->counter = SB_CNT_OTHER;
       rc = OCITransStart(ora_con->svchp, ora_con->errhp, 3600, OCI_TRANS_NEW);
       CHECKERR("OCITransStart");
 
@@ -622,18 +635,24 @@ db_error_t ora_drv_execute(db_stmt_t *stmt, db_result_t *rs)
     }
     else if (ora_stmt->type == STMT_TYPE_COMMIT)
     {
+      rs->counter = SB_CNT_OTHER;
       rc = OCITransCommit(ora_con->svchp, ora_con->errhp, OCI_DEFAULT);
       CHECKERR("OCITransCommit");
 
       return DB_ERROR_NONE;
     }
-    else if (ora_stmt->type == STMT_TYPE_SELECT)
+    else if (ora_stmt->type == STMT_TYPE_SELECT){
       iters = 0;
-    else
+      rs->counter = SB_CNT_READ;
+      rs->statement = stmt;
+    }
+    else {
       iters = 1;
+      rs->counter = SB_CNT_WRITE;
+    }
   
     rc = OCIStmtExecute(ora_con->svchp, ora_stmt->ptr, ora_con->errhp, iters, 0,
-                        NULL, NULL, OCI_DEFAULT);
+                        0, 0, OCI_DEFAULT);
     CHECKERR("OCIStmtExecute");
     
     return DB_ERROR_NONE;
@@ -679,7 +698,7 @@ db_error_t ora_drv_execute(db_stmt_t *stmt, db_result_t *rs)
   return DB_ERROR_NONE;
 
  error:
-  log_text(LOG_FATAL, "failed query was: '%s'", stmt->query);
+  log_text(LOG_FATAL, "failed query was: '%s'", stmt);
   
   return DB_ERROR_FATAL;
 }
@@ -691,19 +710,28 @@ db_error_t ora_drv_execute(db_stmt_t *stmt, db_result_t *rs)
 db_error_t ora_drv_query(db_conn_t *sb_conn, const char *query, size_t len,
                          db_result_t *rs)
 {
-  ora_conn_t      *ora_con = sb_conn->ptr;
+  //ora_conn_t      *ora_con = sb_conn->ptr;
+  ora_conn_t      *ora_con = NULL;
   sword           rc = 0;
   void            *tmp = NULL;
   ub4             iters;
   ora_stmt_type_t type;
   OCIStmt         *stmt = NULL;
 
+  if (sb_conn == NULL)
+    return DB_ERROR_FATAL;
+    
+  ora_con = (ora_conn_t *)sb_conn->ptr;
+    
   (void)rs; /* unused */
+  if (ora_con == NULL )
+      return DB_ERROR_FATAL;
 
   type = get_stmt_type(query);
 
   if (type == STMT_TYPE_BEGIN)
   {
+    rs->counter = SB_CNT_OTHER;
     rc = OCITransStart(ora_con->svchp, ora_con->errhp, 3600, OCI_TRANS_NEW);
     CHECKERR("OCITransStart");
 
@@ -711,15 +739,20 @@ db_error_t ora_drv_query(db_conn_t *sb_conn, const char *query, size_t len,
   }
   else if (type == STMT_TYPE_COMMIT)
   {
+    rs->counter = SB_CNT_OTHER;
     rc = OCITransCommit(ora_con->svchp, ora_con->errhp, OCI_DEFAULT);
     CHECKERR("OCITransCommit");
 
     return DB_ERROR_NONE;
   }
-  else if (type == STMT_TYPE_SELECT)
+  else if (type == STMT_TYPE_SELECT) {
     iters = 0;
-  else
+    rs->counter = SB_CNT_READ;
+  }
+  else {
     iters = 1;
+    rs->counter = SB_CNT_WRITE;
+  }
   
   rc = OCIHandleAlloc(ora_env, (dvoid **)&tmp, OCI_HTYPE_STMT, 0, (dvoid **)NULL);
   CHECKERR("OCIHandleAlloc");
@@ -777,140 +810,8 @@ int ora_drv_fetch_row(db_result_t *rs, db_row_t *row)
 
 int ora_drv_store_results(db_result_t *rs)
 {
-  unsigned int     i;
-  sword            rc;
-  db_stmt_t        *db_stmt = rs->statement;
-  db_conn_t        *db_conn = rs->connection;
-  ora_stmt_t       *ora_stmt;
-  ora_conn_t       *ora_con;
-  ora_result_set_t *ora_rs;
-  ora_column_t     *column;
-  ora_row_t        *row;
-  OCIParam         *parm;
-  void             *tmp = NULL;
-  unsigned int     col_len;
-  ub4              semantics;
-  sb_list_item_t   *pos;
-  text             *fnamep;
-  
-  if (db_stmt == NULL || db_conn == NULL)
-    return 1;
-  
-  ora_stmt = (ora_stmt_t *)db_stmt->ptr;
-  ora_con = (ora_conn_t *)db_conn->ptr;
-  if (ora_stmt == NULL || ora_con == NULL)
-    return 1;
-
-  if (rs->ptr != NULL)
-    return 1;
-  ora_rs = (ora_result_set_t *)calloc(1, sizeof(ora_result_set_t));
-  if (ora_rs == NULL)
-    return 1;
-  rs->ptr = ora_rs;
-  SB_LIST_INIT(&ora_rs->columns);
-  SB_LIST_INIT(&ora_rs->rows);
-
-  i = 1;
-  rc = OCIParamGet((dvoid *)ora_stmt->ptr, OCI_HTYPE_STMT, ora_con->errhp, 
-                   (dvoid **)&tmp, i);
-  parm = (OCIParam *)tmp;
-
-  /* Loop to get description of all columns */
-  while (rc == OCI_SUCCESS)
-  {
-    column = (ora_column_t *)calloc(1, sizeof(ora_column_t));
-    if (column == NULL)
-      goto error;
-    SB_LIST_ADD_TAIL(&column->listitem, &ora_rs->columns);
-
-    /* Get the column type attribute */
-    rc = OCIAttrGet((dvoid *)parm, OCI_DTYPE_PARAM, (dvoid *)&column->type,
-                    NULL, OCI_ATTR_DATA_TYPE, ora_con->errhp);
-    CHECKERR("OCIAttrGet");
-
-    /* Get the column name attribute */
-    rc = OCIAttrGet((dvoid *)parm, OCI_DTYPE_PARAM, &fnamep,
-                    (ub4 *)&col_len, OCI_ATTR_NAME, ora_con->errhp);
-    CHECKERR("OCIAttrGet");
-    column->name = (char *)malloc(col_len + 1);
-    if (column->name == NULL)
-      goto error;
-    strncpy(column->name, fnamep, col_len + 1);
+  (void)rs;  /* unused */
     
-
-    /* Get the length semantics */
-    rc = OCIAttrGet((dvoid *)parm, OCI_DTYPE_PARAM, (dvoid *)&semantics,
-                    NULL, OCI_ATTR_CHAR_USED, ora_con->errhp);
-    CHECKERR("OCIAttrGet");
-
-    if (semantics)
-    {
-      /* Get the column width in characters */
-      rc = OCIAttrGet((dvoid *)parm, OCI_DTYPE_PARAM, (dvoid *)&column->len,
-                      NULL, OCI_ATTR_CHAR_SIZE, ora_con->errhp);
-      if (column->len == 0)
-        column->len = get_oracle_type_size(column->type);
-    }
-    else
-    {
-      /* Get the column width in bytes */
-      rc = OCIAttrGet((dvoid *)parm, OCI_DTYPE_PARAM, (dvoid *)&column->len,
-                      NULL, OCI_ATTR_DATA_SIZE, ora_con->errhp);
-      if (column->len == 0)
-        column->len = get_oracle_type_size(column->type);
-    }
-    CHECKERR("OCIAttrGet");
-
-    OCIDescriptorFree(parm, OCI_DTYPE_PARAM);
-    
-    /* Describe the column */
-    column->value = malloc(column->len);
-    if (column->value == NULL)
-      goto error;
-    rc = OCIDefineByPos(ora_stmt->ptr, &column->defhp, ora_con->errhp, i,
-                        column->value, column->len, column->type, &column->ind,
-                        NULL, NULL, OCI_DEFAULT);
-    CHECKERR("OCIDefineByPos");
-                        
-    i++;
-    rc = OCIParamGet(ora_stmt->ptr, OCI_HTYPE_STMT, ora_con->errhp,
-                     (dvoid **)&tmp, i);
-    parm = (OCIParam *)tmp;
-  }
-  ora_rs->ncolumns = i-1;
-  
-  /* Now fetch the actual data */
-  while(1)
-  {
-    rc = OCIStmtFetch2(ora_stmt->ptr, ora_con->errhp, 1, OCI_FETCH_NEXT, 0,
-                      OCI_DEFAULT);
-    if (rc == OCI_NO_DATA)
-      break;
-    CHECKERR("OCIStmtFetch");
-    
-    row = (ora_row_t *)calloc(1, sizeof(ora_row_t));
-    if (row == NULL)
-      goto error;
-    row->data = (ora_data_t *)calloc(ora_rs->ncolumns, sizeof(ora_data_t));
-    i = 0;
-    SB_LIST_FOR_EACH(pos, &ora_rs->columns)
-    {
-      column = SB_LIST_ENTRY(pos, ora_column_t, listitem);
-      row->data[i].value = (void *)malloc(column->len);
-      if (row->data[i].value == NULL)
-        goto error;
-      memcpy(row->data[i].value, column->value, column->len);
-      row->data[i].ind = column->ind;
-      i++;
-    }
-    SB_LIST_ADD_TAIL(&row->listitem, &ora_rs->rows);
-    ora_rs->nrows++;
-  }
-  
-  return 0;
-  
- error:
-  
   return 1;
 }
 

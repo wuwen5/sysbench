@@ -209,6 +209,8 @@ SB_CHECK_MYSQL
 
 SB_CHECK_DM
 
+SB_CHECK_ORACLE
+
 AS_IF([test x$with_pgsql != xno], [
     AC_CHECK_PGSQL([$with_pgsql])
     USE_PGSQL=1
@@ -219,14 +221,14 @@ AS_IF([test x$with_pgsql != xno], [
 AM_CONDITIONAL(USE_PGSQL, test x$with_pgsql != xno)
 AC_SUBST([USE_PGSQL])
 
-AS_IF([test x$with_oracle != xno], [
-    AC_DEFINE(USE_ORACLE,1,[Define to 1 if you want to compile with Oracle support])
-    ORA_LIBS="-L${sb_with_oracle}/lib -lclntsh"
-    ORA_CFLAGS="-I${with_oracle}/include -I${with_oracle}/rdbms/demo -I${with_oracle}/rdbms/public"
-    AC_SUBST([ORA_LIBS])
-    AC_SUBST([ORA_CFLAGS])
-])
-AM_CONDITIONAL(USE_ORACLE, test x$with_oracle != xno)
+#AS_IF([test x$with_oracle != xno], [
+#    AC_DEFINE(USE_ORACLE,1,[Define to 1 if you want to compile with Oracle support])
+#    ORA_LIBS="-L${sb_with_oracle}/lib -lclntsh"
+#    ORA_CFLAGS="-I${with_oracle}/include -I${with_oracle}/rdbms/demo -I${with_oracle}/rdbms/public"
+#    AC_SUBST([ORA_LIBS])
+#    AC_SUBST([ORA_CFLAGS])
+#])
+#AM_CONDITIONAL(USE_ORACLE, test x$with_oracle != xno)
 
 # Check for libaio
 AC_CHECK_AIO

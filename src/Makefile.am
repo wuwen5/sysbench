@@ -52,8 +52,8 @@ xoroshiro128plus.h
 sysbench_LDADD = tests/fileio/libsbfileio.a tests/threads/libsbthreads.a \
     tests/memory/libsbmemory.a tests/cpu/libsbcpu.a \
     tests/mutex/libsbmutex.a \
-    $(mysql_ldadd) $(pgsql_ldadd) ${dm_ldadd} $(ora_ldadd) \
+    $(mysql_ldadd) $(pgsql_ldadd) $(dm_ldadd) $(ora_ldadd) \
     $(LUAJIT_LIBS) $(CK_LIBS)
 
 sysbench_LDFLAGS = $(mysql_ldflags) \
-    $(pgsql_ldflags) $(ora_ldflags) $(LUAJIT_LDFLAGS)
+    $(pgsql_ldflags) $(LUAJIT_LDFLAGS)
