@@ -183,6 +183,13 @@ function create_table(drv, con, table_num)
       else
         id_def = "SERIAL"
       end
+   elseif drv:name() == "dm"
+   then
+      if sysbench.opt.auto_inc then
+         id_def = "INTEGER IDENTITY(1,1)"
+      else
+         id_def = "INTEGER NOT NULL"
+      end  
    else
       error("Unsupported database driver:" .. drv:name())
    end
