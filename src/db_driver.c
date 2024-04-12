@@ -106,6 +106,9 @@ int db_register(void)
 #ifdef USE_DM
   register_driver_dm(&drivers);
 #endif  
+#ifdef USE_ORACLE
+  register_driver_oracle(&drivers);
+#endif
 
   /* Register command line options for each driver */
   SB_LIST_FOR_EACH(pos, &drivers)
