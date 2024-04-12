@@ -29,11 +29,11 @@ ldconfig
 ```
 
 ## 编译&安装 Sysbench
-```
+```shell
 ./autogen.sh
-#使用--with-oracle 支持oracle， 通过--with-oracle-includes --with-oracle-libs指定Oracle客户端路径 (如未安装mysql客户端驱动,可--without-mysql排除默认的mysql支持)
-#--with-oracle-libs=lib路径，如rpm安装方式，可指定为/usr/lib/oracle/19.22/client64/lib
-#--with-oracle-includes=include路径，如rpm安装方式，可指定为/usr/include/oracle/19.22/client64
+# 使用--with-oracle 支持oracle， 通过--with-oracle-includes --with-oracle-libs指定Oracle客户端路径 (如未安装mysql客户端驱动,可--without-mysql排除默认的mysql支持)
+# --with-oracle-libs=lib路径，如rpm安装方式，可指定为/usr/lib/oracle/19.22/client64/lib
+# --with-oracle-includes=include路径，如rpm安装方式，可指定为/usr/include/oracle/19.22/client64
 ./configure --with-oracle --with-oracle-libs=/root/instantclient_19_22 --with-oracle-includes=/root/instantclient_19_22/sdk/include --without-mysql
 make -j
 make install
@@ -113,6 +113,6 @@ sysbench oltp_point_select --tables=10 --table-size=10000 --db-driver=oracle --o
 # 测试Point_Select **(注意：如发生段错误(Segmentation fault)，需通过--thread-stack-size指定合适线程栈大小，如 --thread-stack-size=512K)**
 sysbench oltp_point_select --tables=10 --table-size=10000 --db-driver=oracle --oracle-db=192.168.x.x:1521/orcl --oracle-user=XXX --oracle-password=XXX --report-interval=10 --thread-stack-size=512K run
 
-#清理测试数据
+# 清理测试数据
 sysbench oltp_point_select --tables=10 --db-driver=oracle --oracle-db=192.168.x.x:1521/orcl --oracle-user=XXX --oracle-password=XXX cleanup
 ```
