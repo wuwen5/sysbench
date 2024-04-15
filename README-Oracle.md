@@ -14,6 +14,9 @@ Oracle Build steps
 ```
 yum -y localinstall oracle-instantclient19.22-basic-19.22.0.0.0-1.x86_64.rpm
 yum -y localinstall oracle-instantclient19.22-devel-19.22.0.0.0-1.x86_64.rpm
+
+echo /usr/lib/oracle/19.22/client64/lib > /etc/ld.so.conf.d/oracle-instantclient.conf
+ldconfig
 ```
 
 ### 使用zip 安装方式
@@ -44,6 +47,7 @@ make install
 ```shell
 sysbench --help
 ```
+
 ```
 Usage:
   sysbench [options]... [testname] [command]
@@ -106,6 +110,7 @@ See 'sysbench <testname> help' for a list of options for each test.
 ```
 
 - 测试初始化数据
+
 ```shell
 # 测试初始化数据
 sysbench oltp_point_select --tables=10 --table-size=10000 --db-driver=oracle --oracle-db=192.168.x.x:1521/orcl --oracle-user=XXX --oracle-password=XXX prepare
