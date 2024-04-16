@@ -121,3 +121,11 @@ sysbench oltp_point_select --tables=10 --table-size=10000 --db-driver=oracle --o
 # 清理测试数据
 sysbench oltp_point_select --tables=10 --db-driver=oracle --oracle-db=192.168.x.x:1521/orcl --oracle-user=XXX --oracle-password=XXX cleanup
 ```
+
+- 如遇 `KPEDBG_HDL_POP_FCPTR` 错误，可编辑或新增 `/usr/lib/oracle/19.22/client64/lib/network/admin/sqlnet.ora` 文件，添加以下内容
+
+```
+DIAG_ADR_ENABLED=OFF
+DIAG_SIGHANDLER_ENABLED=FALSE
+DIAG_DDE_ENABLED=FALSE
+```
