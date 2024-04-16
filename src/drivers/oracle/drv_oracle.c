@@ -31,6 +31,7 @@
 
 #include "sb_options.h"
 #include "db_driver.h"
+#include <pthread.h>
 
 
 /* Number of rows to prefetch for result sets */
@@ -162,7 +163,10 @@ static drv_caps_t ora_drv_caps =
 };
 
 
-static OCIEnv *ora_env; /* OCI environmental handle */
+//static OCIEnv *ora_env; /* OCI environmental handle */
+static pthread_mutex_t pos_mutex;
+static pthread_key_t ora_env_key;
+static pthread_once_t ora_env_key_once = PTHREAD_ONCE_INIT;
 
 static ora_drv_args_t args;          /* driver args */
 
@@ -220,6 +224,29 @@ static sb4 get_oracle_type_size(sword);
 static ora_stmt_type_t get_stmt_type(const char *);
 static void checkerr(OCIError *, sword);
 
+// 线程局部存储键的初始化函数
+static void create_ora_env_key()
+{
+    pthread_key_create(&ora_env_key, NULL);
+}
+
+// 在每个线程中设置和获取 ora_env
+void set_ora_env(OCIEnv *env) {
+  // 确保线程局部存储键只被初始化一次
+    pthread_once(&ora_env_key_once, create_ora_env_key);
+
+    // 设置当前线程的 OCIEnv 对象
+    pthread_setspecific(ora_env_key, env);
+}
+
+OCIEnv *get_ora_env() {
+   // 确保线程局部存储键只被初始化一次
+    pthread_once(&ora_env_key_once, create_ora_env_key);
+
+    // 返回当前线程的 OCIEnv 对象
+    return (OCIEnv *)pthread_getspecific(ora_env_key);
+}
+
 /* Register Oracle driver */
 
 
@@ -242,16 +269,7 @@ int ora_drv_init(void)
   args.password = sb_get_value_string("oracle-password");
   args.db = sb_get_value_string("oracle-db");
 
-  /* Initialize the environment */
-  rc = OCIEnvCreate(&ora_env, (ub4) OCI_DEFAULT,
-          (dvoid *) 0, (dvoid * (*)(dvoid *,size_t)) 0,
-          (dvoid * (*)(dvoid *, dvoid *, size_t)) 0,
-          (void (*)(dvoid *, dvoid *)) 0, (size_t) 0, (dvoid **) 0);
-  if (rc != OCI_SUCCESS || ora_env == NULL)
-  {
-    log_text(LOG_FATAL, "OCIEnvCreate failed!");
-    return 1;
-  }
+  pthread_mutex_init(&pos_mutex, NULL);
   
   return 0;
 }
@@ -275,10 +293,25 @@ int ora_drv_connect(db_conn_t *sb_conn)
 {
   sword       rc;
   ora_conn_t *ora_con = NULL;
+  OCIEnv *ora_env;
 
   ora_con = (ora_conn_t *)malloc(sizeof(ora_conn_t));
   if (ora_con == NULL)
     goto error;
+  
+  pthread_mutex_lock(&pos_mutex);
+  
+  rc = OCIEnvCreate(&ora_env, (ub4) OCI_DEFAULT, 
+      (dvoid *) 0, (dvoid * (*)(dvoid *,size_t)) 0,
+      (dvoid * (*)(dvoid *, dvoid *, size_t)) 0,
+      (void (*)(dvoid *, dvoid *)) 0, (size_t) 0, (dvoid **) 0);
+  if (rc != OCI_SUCCESS || ora_env == NULL)
+  {
+    log_text(LOG_FATAL, "OCIEnvCreate failed!");
+    return 1;
+  }
+  // 将 ora_env 存储到线程局部存储中
+  set_ora_env(ora_env);  
   
   /* Allocate a service handle */
   rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_con->svchp), OCI_HTYPE_SVCCTX, 0,
@@ -347,12 +380,15 @@ int ora_drv_connect(db_conn_t *sb_conn)
   CHECKERR("OCIAttrSet");
   
   sb_conn->ptr = ora_con;
+  pthread_mutex_unlock(&pos_mutex);
   
   return 0;
 
  error:
-  if (ora_con != NULL)
+  if (ora_con != NULL) {
+    pthread_mutex_unlock(&pos_mutex);
     free(ora_con);
+  }
   
   return 1;
 }
@@ -397,6 +433,19 @@ int ora_drv_disconnect(db_conn_t *sb_conn)
   
   free(con);
   
+  OCIEnv *ora_env = get_ora_env();
+  
+  if (ora_env == NULL) {
+    return 1;
+  }
+    
+  rc = OCIHandleFree(ora_env, OCI_HTYPE_ENV);
+  if (rc != OCI_SUCCESS)
+  {
+    log_text(LOG_FATAL, "OCIHandleFree failed");
+    return 1;
+  }
+  
   return res;
 }
 
@@ -425,6 +474,8 @@ int ora_drv_prepare(db_stmt_t *stmt, const char *query, size_t len)
     ora_stmt = (ora_stmt_t *)calloc(1, sizeof(ora_stmt_t));
     if (ora_stmt == NULL)
       goto error;
+    
+    OCIEnv *ora_env = get_ora_env();
     
     rc = OCIHandleAlloc(ora_env, (dvoid **)&(ora_stmt->ptr), OCI_HTYPE_STMT, 0,
                         0);
@@ -754,6 +805,8 @@ db_error_t ora_drv_query(db_conn_t *sb_conn, const char *query, size_t len,
     rs->counter = SB_CNT_WRITE;
   }
   
+  OCIEnv *ora_env = get_ora_env();
+  
   rc = OCIHandleAlloc(ora_env, (dvoid **)&tmp, OCI_HTYPE_STMT, 0, (dvoid **)NULL);
   CHECKERR("OCIHandleAlloc");
 
@@ -890,18 +943,6 @@ int ora_drv_close(db_stmt_t *stmt)
 
 int ora_drv_done(void)
 {
-  sword rc;
-
-  if (ora_env == NULL)
-    return 1;
-
-  rc = OCIHandleFree(ora_env, OCI_HTYPE_ENV);
-  if (rc != OCI_SUCCESS)
-  {
-    log_text(LOG_FATAL, "OCIHandleFree failed");
-    return 1;
-  }
-
   return 0;
 }
 
